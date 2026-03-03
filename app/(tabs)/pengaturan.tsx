@@ -1,50 +1,50 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   StyleSheet, Text, View, ScrollView, Switch, 
   TouchableOpacity, SafeAreaView, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-// Import context tema
-// Simple local useTheme fallback (replaces missing ../context/ThemeContext)
+
+// --- TEMA WARNA CUSTOM ---
 type Colors = {
   bg: string;
   card: string;
   text: string;
+  subText: string;
   border: string;
-};
-
-type ThemeResult = {
-  isDark: boolean;
-  toggleTheme: () => void;
-  colors: Colors;
+  accent: string;
 };
 
 const lightColors: Colors = {
-  bg: '#FFFFFF',
-  card: '#FFFFFF',
-  text: '#111827',
-  border: '#E5E7EB',
+  bg: '#fcf6ea',    // Warna Krem Gading pilihanmu
+  card: '#FFFFFF',  // Putih bersih untuk kontainer
+  text: '#4A4A4A',  // Abu-abu gelap agar nyaman dibaca
+  subText: '#9CA3AF',
+  border: '#F3F4F6',
+  accent: '#C5A358', // Warna Emas Premium
 };
 
 const darkColors: Colors = {
-  bg: '#0B1220',
-  card: '#0F1724',
+  bg: '#1A1A1A',
+  card: '#262626',
   text: '#F9FAFB',
-  border: '#1F2937',
+  subText: '#9CA3AF',
+  border: '#333333',
+  accent: '#C5A358',
 };
 
-export const useTheme = (): ThemeResult => {
-  const [isDark, setIsDark] = React.useState(false);
-  const toggleTheme = React.useCallback(() => setIsDark(v => !v), []);
+// Hook Tema Lokal
+export const useTheme = () => {
+  const [isDark, setIsDark] = useState(false);
+  const toggleTheme = useCallback(() => setIsDark(v => !v), []);
   const colors = isDark ? darkColors : lightColors;
   return { isDark, toggleTheme, colors };
 };
 
 export default function PengaturanScreen() {
-  // Mengambil state dan warna dari Context
   const { isDark, toggleTheme, colors } = useTheme();
 
-  // Komponen Helper untuk Baris Pengaturan
+  // Komponen Reusable untuk List Item
   const SettingItem = ({ icon, title, subtitle, onPress, toggle = false, value = false, onValueChange = () => {} }: any) => (
     <TouchableOpacity 
       style={styles.itemContainer} 
@@ -52,18 +52,18 @@ export default function PengaturanScreen() {
       disabled={toggle}
       activeOpacity={0.7}
     >
-      <View style={[styles.iconWrapper, { backgroundColor: isDark ? '#333' : '#F9FAFB' }]}>
-        <Ionicons name={icon} size={22} color="#7B8FA1" />
+      <View style={[styles.iconWrapper, { backgroundColor: isDark ? '#333' : '#fcf6ea' }]}>
+        <Ionicons name={icon} size={22} color={colors.accent} />
       </View>
       <View style={styles.textWrapper}>
         <Text style={[styles.itemTitle, { color: colors.text }]}>{title}</Text>
-        {subtitle && <Text style={styles.itemSubtitle}>{subtitle}</Text>}
+        {subtitle && <Text style={[styles.itemSubtitle, { color: colors.subText }]}>{subtitle}</Text>}
       </View>
       {toggle ? (
         <Switch 
           value={value} 
           onValueChange={onValueChange}
-          trackColor={{ false: "#D1D5DB", true: "#C5A358" }}
+          trackColor={{ false: "#D1D5DB", true: colors.accent }}
           thumbColor="#FFFFFF"
         />
       ) : (
@@ -78,72 +78,67 @@ export default function PengaturanScreen() {
         
         <Text style={[styles.headerTitle, { color: colors.text }]}>Pengaturan</Text>
 
-        {/* Section: Akun */}
+        {/* Section: Akun / Profil */}
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <View style={styles.profileContainer}>
-            <View style={[styles.avatar, { backgroundColor: isDark ? '#333' : '#F3F4F6' }]}>
-              <Ionicons name="person" size={30} color="#7B8FA1" />
+            <View style={[styles.avatar, { backgroundColor: isDark ? '#333' : '#fcf6ea' }]}>
+              <Ionicons name="person" size={30} color={colors.accent} />
             </View>
             <View style={styles.profileText}>
               <Text style={[styles.loginTitle, { color: colors.text }]}>Masuk Akun</Text>
-              <Text style={styles.loginSubtitle}>Sync bookmark & progress</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>DEVELOP</Text>
+              <Text style={[styles.loginSubtitle, { color: colors.subText }]}>Simpan bookmark di cloud</Text>
+              <View style={[styles.badge, { backgroundColor: isDark ? '#444' : '#FFF9E6' }]}>
+                <Text style={[styles.badgeText, { color: colors.accent }]}>PRO VERSION</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.loginButton}>
-              <Ionicons name="log-in-outline" size={18} color="white" />
+            <TouchableOpacity style={[styles.loginButton, { backgroundColor: colors.accent }]}>
               <Text style={styles.loginButtonText}>Masuk</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Section: Notifikasi */}
-        <Text style={styles.sectionLabel}>NOTIFIKASI</Text>
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <SettingItem 
-            icon="notifications-outline" 
-            title="Pengaturan Notifikasi" 
-            subtitle="Waktu sholat, ayat harian" 
-          />
-        </View>
-
-        {/* Section: Tampilan */}
-        <Text style={styles.sectionLabel}>TAMPILAN</Text>
+        {/* Section: Fitur */}
+        <Text style={styles.sectionLabel}>PREFERENSI</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
           <SettingItem 
             icon="moon-outline" 
             title="Mode Gelap" 
-            subtitle="Tampilan lebih nyaman di malam hari"
+            subtitle="Ganti tema aplikasi"
             toggle={true}
             value={isDark} 
             onValueChange={toggleTheme} 
           />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
           <SettingItem 
+            icon="notifications-outline" 
+            title="Notifikasi" 
+            subtitle="Ayat harian & pengingat" 
+          />
+          <View style={[styles.divider, { backgroundColor: colors.border }]} />
+          <SettingItem 
             icon="text-outline" 
-            title="Ukuran Font Arab" 
-            subtitle="Sedang" 
+            title="Ukuran Huruf" 
+            subtitle="Atur besar kecilnya teks Arab" 
           />
         </View>
 
-        {/* Section: Dukungan */}
-        <Text style={styles.sectionLabel}>DUKUNGAN</Text>
+        {/* Section: Lainnya */}
+        <Text style={styles.sectionLabel}>LAINNYA</Text>
         <View style={[styles.card, { backgroundColor: colors.card }]}>
-          <SettingItem icon="cash-outline" title="Dukung Developer" subtitle="Kontribusi untuk biaya maintenance" />
+          <SettingItem icon="star-outline" title="Beri Rating" />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <SettingItem icon="star-outline" title="Beri Rating" subtitle="Bantu kami memberikan rating" />
+          <SettingItem icon="share-social-outline" title="Bagikan Aplikasi" />
           <View style={[styles.divider, { backgroundColor: colors.border }]} />
-          <SettingItem icon="share-social-outline" title="Bagikan Aplikasi" subtitle="Ajak teman menggunakan aplikasi ini" />
-        </View>
-
-        {/* Section: Tentang */}
-        <Text style={styles.sectionLabel}>TENTANG</Text>
-        <View style={[styles.card, { backgroundColor: colors.card }]}>
           <SettingItem icon="shield-checkmark-outline" title="Kebijakan Privasi" />
         </View>
 
-        <View style={{ height: 120 }} />
+        {/* Info Versi */}
+        <View style={styles.footer}>
+          <Text style={[styles.versionText, { color: colors.subText }]}>Quran App v1.0.0</Text>
+          <Text style={[styles.footerText, { color: colors.subText }]}>Zorknov</Text>
+        </View>
+
+        <View style={{ height: 100 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -153,43 +148,45 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1, paddingHorizontal: 20 },
   headerTitle: { 
-    fontSize: 26, fontWeight: 'bold', 
-    marginTop: Platform.OS === 'android' ? 55 : 20, marginBottom: 20 
+    fontSize: 28, fontWeight: 'bold', 
+    marginTop: Platform.OS === 'android' ? 60 : 20, marginBottom: 25 
   },
   sectionLabel: { 
-    fontSize: 12, fontWeight: 'bold', color: '#9CA3AF', 
-    marginTop: 25, marginBottom: 10, letterSpacing: 1 
+    fontSize: 11, fontWeight: 'bold', color: '#9CA3AF', 
+    marginTop: 30, marginBottom: 12, letterSpacing: 1.5 
   },
   card: { 
-    borderRadius: 16, overflow: 'hidden', elevation: 2, 
-    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, 
-    shadowOffset: { width: 0, height: 4 } 
+    borderRadius: 20, overflow: 'hidden', 
+    elevation: 3, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 15, 
+    shadowOffset: { width: 0, height: 5 } 
   },
   profileContainer: { flexDirection: 'row', alignItems: 'center', padding: 20 },
   avatar: { 
-    width: 55, height: 55, borderRadius: 27.5, 
+    width: 60, height: 60, borderRadius: 30, 
     justifyContent: 'center', alignItems: 'center' 
   },
   profileText: { flex: 1, marginLeft: 15 },
-  loginTitle: { fontSize: 17, fontWeight: 'bold' },
-  loginSubtitle: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  loginTitle: { fontSize: 18, fontWeight: 'bold' },
+  loginSubtitle: { fontSize: 12, marginTop: 2 },
   badge: { 
-    backgroundColor: '#FDE68A', alignSelf: 'flex-start', 
-    paddingHorizontal: 8, paddingVertical: 2, borderRadius: 5, marginTop: 5 
+    alignSelf: 'flex-start', paddingHorizontal: 8, 
+    paddingVertical: 3, borderRadius: 6, marginTop: 6 
   },
-  badgeText: { fontSize: 10, fontWeight: 'bold', color: '#B45309' },
+  badgeText: { fontSize: 9, fontWeight: 'bold' },
   loginButton: { 
-    backgroundColor: '#7B8FA1', flexDirection: 'row', 
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, alignItems: 'center' 
+    paddingHorizontal: 15, paddingVertical: 8, borderRadius: 10, justifyContent: 'center' 
   },
-  loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 13, marginLeft: 5 },
-  itemContainer: { flexDirection: 'row', alignItems: 'center', padding: 15 },
+  loginButtonText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+  itemContainer: { flexDirection: 'row', alignItems: 'center', padding: 18 },
   iconWrapper: { 
-    width: 38, height: 38, borderRadius: 10, 
+    width: 42, height: 42, borderRadius: 12, 
     justifyContent: 'center', alignItems: 'center' 
   },
   textWrapper: { flex: 1, marginLeft: 15 },
-  itemTitle: { fontSize: 15, fontWeight: '600' },
-  itemSubtitle: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
-  divider: { height: 1, marginLeft: 65 }
+  itemTitle: { fontSize: 16, fontWeight: '600' },
+  itemSubtitle: { fontSize: 12, marginTop: 3 },
+  divider: { height: 1, marginHorizontal: 20 },
+  footer: { marginTop: 40, alignItems: 'center' },
+  versionText: { fontSize: 12, fontWeight: '600' },
+  footerText: { fontSize: 11, marginTop: 5 }
 });

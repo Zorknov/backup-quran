@@ -2,7 +2,6 @@ import React, { useEffect, useState, type ComponentProps } from "react";
 import {
   View,
   Text,
-  SafeAreaView,
   StyleSheet,
   ScrollView,
   TextInput,
@@ -12,7 +11,9 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
+// --- TYPES ---
 type PrayerTimings = {
   Fajr?: string;
   Dhuhr?: string;
@@ -29,77 +30,69 @@ type DoaType = {
   liked: boolean;
 };
 
-export default function App() {
+type IoniconsName = ComponentProps<typeof Ionicons>["name"];
+
+interface MenuItem {
+  icon: IoniconsName;
+  label: string;
+  path?: string;
+}
+
+export default function Home() {
+  const router = useRouter();
+
   const [currentTime, setCurrentTime] = useState(new Date());
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimings>({});
   const [nextPrayer, setNextPrayer] = useState("");
   const [countdown, setCountdown] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [doaList, setDoaList] = useState<DoaType[]>([
-    {
-      name: "suiaoa",
-      time: "2 jam lalu",
-      text: "Ya Allah, sembuhkanlah ibuku dari segala penyakitnya dan angkat rasa sakitnya. Aamiin.",
-      count: 124,
-      liked: false,
-    },
-    {
-      name: "rahmat23",
-      time: "5 jam lalu",
-      text: "Ya Rabb, mudahkan rezekiku dan jauhkan aku dari kesulitan hidup.",
-      count: 87,
-      liked: false,
-    },
-    {
-      name: "aisyah",
-      time: "1 hari lalu",
-      text: "Semoga Ramadhan ini menjadi jalan hijrahku menuju pribadi yang lebih baik.",
-      count: 203,
-      liked: false,
-    },
-    {
-      name: "farhan",
-      time: "3 hari lalu",
-      text: "Ya Allah, jadikan keluargaku keluarga yang sakinah dan selalu dalam lindungan-Mu.",
-      count: 65,
-      liked: false,
-    },
+    { name: "suiaoa", time: "2 jam lalu", text: "Ya Allah, sembuhkanlah ibuku dari segala penyakitnya. Aamiin.", count: 124, liked: false },
+    { name: "rahmat23", time: "5 jam lalu", text: "Ya Rabb, mudahkan rezekiku dan jauhkan aku dari kesulitan hidup.", count: 87, liked: false },
+    { name: "aisyah", time: "1 hari lalu", text: "Semoga Ramadhan ini menjadi jalan hijrahku menuju pribadi yang lebih baik.", count: 203, liked: false },
   ]);
+
+  // UPDATE: Menambahkan path "/donasi"
+  const menuItems: MenuItem[] = [
+    { icon: "book-outline", label: "Al-Quran", path: "/alquran" },
+    { icon: "heart-outline", label: "Doa Harian", path: "/doa" },
+    { icon: "sparkles-outline", label: "Dzikir", path: "/dzikir" },
+    { icon: "document-text-outline", label: "Hadits", path: "/hadist" },
+    { icon: "compass-outline", label: "Arah Kiblat", path: "/compass" },
+    { icon: "cash-outline", label: "Donasi", path: "/donasi" }, // <--- INI SUDAH DIUPDATE
+    { icon: "star-outline", label: "Asmaul Husna", path: "/asmaul" },
+    { icon: "grid-outline", label: "Lainnya", path: "/lainnya" },
+  ];
+
+  const filteredMenu = menuItems.filter((item) =>
+    item.label.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const isBannerVisible = searchQuery === "" || "ramadhan puasa mubarak".includes(searchQuery.toLowerCase());
+  const isDoaVisible = searchQuery === "" || "doa aminkan sedekah".includes(searchQuery.toLowerCase());
 
   const handleAamiin = (index: number) => {
     const updated = [...doaList];
-
-    if (updated[index].liked) {
-      updated[index].count -= 1;
-    } else {
-      updated[index].count += 1;
-    }
-
+    updated[index].liked ? updated[index].count -= 1 : updated[index].count += 1;
     updated[index].liked = !updated[index].liked;
     setDoaList(updated);
   };
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    fetch(
-      "https://api.aladhan.com/v1/timingsByCity?city=Bogor&country=Indonesia&method=11"
-    )
+    fetch("https://api.aladhan.com/v1/timingsByCity?city=Bogor&country=Indonesia&method=11")
       .then((res) => res.json())
-      .then((data) => {
-        setPrayerTimes(data.data.timings);
-      })
+      .then((data) => setPrayerTimes(data.data.timings))
       .catch((err) => console.log(err));
   }, []);
 
   useEffect(() => {
     if (!prayerTimes.Fajr) return;
-
     const prayers = [
       { name: "Subuh", time: prayerTimes.Fajr },
       { name: "Dzuhur", time: prayerTimes.Dhuhr },
@@ -107,352 +100,186 @@ export default function App() {
       { name: "Maghrib", time: prayerTimes.Maghrib },
       { name: "Isya", time: prayerTimes.Isha },
     ];
-
     const now = new Date();
-
+    
     for (let i = 0; i < prayers.length; i++) {
       if (!prayers[i].time) continue;
-
       const [hour, minute] = prayers[i].time!.split(":");
-
-      const prayerDate = new Date();
-      prayerDate.setHours(parseInt(hour));
-      prayerDate.setMinutes(parseInt(minute));
-      prayerDate.setSeconds(0);
-
-      if (prayerDate > now) {
+      const pDate = new Date();
+      pDate.setHours(parseInt(hour), parseInt(minute), 0, 0);
+      if (pDate > now) {
         setNextPrayer(prayers[i].name);
-
-        const diff = prayerDate.getTime() - now.getTime();
-        const hours = Math.floor(diff / 3600000);
-        const minutes = Math.floor((diff % 3600000) / 60000);
-        const seconds = Math.floor((diff % 60000) / 1000);
-
-        setCountdown(
-          `${hours.toString().padStart(2, "0")}:${minutes
-            .toString()
-            .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`
-        );
+        const diff = pDate.getTime() - now.getTime();
+        const h = Math.floor(diff / 3600000);
+        const m = Math.floor((diff % 3600000) / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        setCountdown(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`);
         break;
       }
     }
   }, [currentTime, prayerTimes]);
 
-  const prayerList = [
-    { label: "Subuh", value: prayerTimes.Fajr },
-    { label: "Dzuhur", value: prayerTimes.Dhuhr },
-    { label: "Ashar", value: prayerTimes.Asr },
-    { label: "Maghrib", value: prayerTimes.Maghrib },
-    { label: "Isya", value: prayerTimes.Isha },
-  ];
-
-  type IoniconsName = ComponentProps<typeof Ionicons>["name"];
-
-  const menuItems: { icon: IoniconsName; label: string }[] = [
-    { icon: "book-outline", label: "Al-Quran" },
-    { icon: "heart-outline", label: "Doa Harian" },
-    { icon: "sparkles-outline", label: "Dzikir Duha" },
-    { icon: "document-text-outline", label: "Hadits" },
-    { icon: "compass-outline", label: "Arah Kiblat" },
-    { icon: "cash-outline", label: "Donasi" },
-    { icon: "star-outline", label: "Asmaul Husna" },
-    { icon: "grid-outline", label: "Lainnya" },
-  ];
-
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-      <ScrollView showsVerticalScrollIndicator={false}>
-
-        {/* HEADER */}
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 120 }} 
+      >
         <View style={styles.headerWrapper}>
-          <ImageBackground
-            source={require("../../assets/images/element.png")}
-            style={styles.header}
-            resizeMode="cover"
-          >
-            <View style={styles.overlay} />
-
-            <Text style={styles.hijri}>12 Ramadhan 1447 H</Text>
-
-            <Text style={styles.date}>
-              {currentTime.toLocaleDateString("id-ID", {
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </Text>
-
-            <Text style={styles.location}>Bogor, Indonesia</Text>
-
-            <View style={styles.timeWrapper}>
-              <Text style={styles.time}>
-                {currentTime.toLocaleTimeString("id-ID", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </Text>
-            </View>
-
-            <Text style={styles.countdown}>
-              {nextPrayer} dalam {countdown}
-            </Text>
-
-            <View style={styles.prayerRow}>
-              {prayerList.map((item, index) => (
-                <View key={index} style={styles.prayerItem}>
-                  <Text style={styles.prayerName}>{item.label}</Text>
-                  <Text style={styles.prayerTime}>
-                    {item.value?.slice(0, 5) || "--:--"}
-                  </Text>
+          <ImageBackground source={require("../../assets/images/element.png")} style={styles.header} resizeMode="cover">
+            <View style={styles.overlay} pointerEvents="none" />
+            
+            <View style={styles.headerContent}>
+              <View style={styles.topRow}>
+                <View>
+                  <Text style={styles.hijri}>12 Ramadhan 1447 H</Text>
+                  <Text style={styles.date}>{currentTime.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}</Text>
                 </View>
-              ))}
+
+                <TouchableOpacity 
+                  style={styles.notificationBtn}
+                  activeOpacity={0.7}
+                  onPress={() => router.push('/notification' as any)}
+                  hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+                >
+                  <Ionicons name="notifications-outline" size={24} color="#fff" />
+                  <View style={styles.notifBadge} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.location}>Bogor, Indonesia</Text>
+              
+              <View style={styles.timeWrapper}>
+                <Text style={styles.time}>{currentTime.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</Text>
+              </View>
+              
+              <Text style={styles.countdown}>{nextPrayer ? `${nextPrayer} dalam ${countdown}` : "Memuat jadwal..."}</Text>
+              
+              <View style={styles.prayerRow}>
+                {['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'].map((label, idx) => (
+                  <View key={idx} style={styles.prayerItem}>
+                    <Text style={styles.prayerName}>{label}</Text>
+                    <Text style={styles.prayerTime}>
+                      {label === "Subuh" ? prayerTimes.Fajr?.slice(0, 5) : 
+                       label === "Dzuhur" ? prayerTimes.Dhuhr?.slice(0, 5) :
+                       label === "Ashar" ? prayerTimes.Asr?.slice(0, 5) :
+                       label === "Maghrib" ? prayerTimes.Maghrib?.slice(0, 5) :
+                       prayerTimes.Isha?.slice(0, 5) || "--:--"}
+                    </Text>
+                  </View>
+                ))}
+              </View>
             </View>
           </ImageBackground>
         </View>
 
-        {/* SEARCH */}
+        {/* SEARCH BOX */}
         <View style={styles.searchBox}>
           <Ionicons name="search" size={18} color="#9CA3AF" />
           <TextInput
-            placeholder="Cari surat, doa, artikel, hadits ..."
+            placeholder="Cari menu atau doa..."
             placeholderTextColor="#9CA3AF"
             style={styles.input}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
           />
+          {searchQuery !== "" && (
+            <TouchableOpacity onPress={() => setSearchQuery("")}>
+              <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          )}
         </View>
 
-        {/* GRID */}
+        {/* GRID MENU */}
         <View style={styles.grid}>
-          {menuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              activeOpacity={0.7}
-            >
-              <View style={styles.iconBox}>
-                <Ionicons name={item.icon} size={22} color="#4B6B63" />
-              </View>
+          {filteredMenu.map((item, index) => (
+            <TouchableOpacity key={index} style={styles.menuItem} onPress={() => item.path && router.push(item.path as any)}>
+              <View style={styles.iconBox}><Ionicons name={item.icon} size={22} color="#4B6B63" /></View>
               <Text style={styles.menuText}>{item.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* BANNER */}
-        <View style={styles.banner}>
-          <Ionicons name="moon-outline" size={22} color="#fff" />
-          <View style={{ marginLeft: 10 }}>
-            <Text style={styles.bannerTitle}>Ramadhan Mubarak!</Text>
-            <Text style={styles.bannerSub}>
-              Selamat menjalankan ibadah puasa
-            </Text>
+        {/* BANNER & DOA */}
+        {isBannerVisible && (
+          <View style={styles.banner}>
+            <Ionicons name="moon-outline" size={22} color="#fff" />
+            <View style={{ marginLeft: 10 }}>
+              <Text style={styles.bannerTitle}>Ramadhan Mubarak!</Text>
+              <Text style={styles.bannerSub}>Selamat menjalankan ibadah puasa</Text>
+            </View>
           </View>
-        </View>
+        )}
 
-        {/* DOA SECTION */}
-        <View style={styles.doaSection}>
-          <Text style={styles.doaTitle}>Aminkan doa saudaramu</Text>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            {doaList.map((item, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.doaCard}
-                activeOpacity={0.9}
-              >
-                <View style={styles.userRow}>
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {item.name.charAt(0).toUpperCase()}
-                    </Text>
+        {isDoaVisible && (
+          <View style={styles.doaSection}>
+            <Text style={styles.doaTitle}>Aminkan doa saudaramu</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }}>
+              {doaList.map((item, index) => (
+                <View key={index} style={styles.doaCard}>
+                  <View style={styles.userRow}>
+                    <View style={styles.avatar}><Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text></View>
+                    <View>
+                      <Text style={styles.doaUser}>{item.name}</Text>
+                      <Text style={styles.doaTime}>{item.time}</Text>
+                    </View>
                   </View>
-                  <View>
-                    <Text style={styles.doaUser}>{item.name}</Text>
-                    <Text style={styles.doaTime}>{item.time}</Text>
-                  </View>
+                  <Text style={styles.doaContent}>{item.text}</Text>
+                  <TouchableOpacity style={[styles.aamiinSmall, item.liked && { backgroundColor: "#4B6B63" }]} onPress={() => handleAamiin(index)}>
+                    <Text style={[styles.aamiinSmallText, item.liked && { color: "#fff" }]}>🤲 {item.count}</Text>
+                  </TouchableOpacity>
                 </View>
-
-                <Text style={styles.doaContent}>{item.text}</Text>
-
-                <TouchableOpacity
-                  style={[
-                    styles.aamiinSmall,
-                    item.liked && { backgroundColor: "#4B6B63" },
-                  ]}
-                  activeOpacity={0.6}
-                  onPress={() => handleAamiin(index)}
-                >
-                  <Text
-                    style={[
-                      styles.aamiinSmallText,
-                      item.liked && { color: "#fff" },
-                    ]}
-                  >
-                    🤲 {item.count}
-                  </Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const shadowStyle = {
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.1,
-  shadowRadius: 6,
-  elevation: 5,
-};
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FCF6EA" },
-
-  headerWrapper: {
-    overflow: "hidden",
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-  },
-
+  headerWrapper: { overflow: "hidden" },
   header: {
-    paddingTop:
-      Platform.OS === "android"
-        ? (StatusBar.currentHeight || 0) + 20
-        : 60,
-    paddingHorizontal: 20,
-    paddingBottom: 35,
+    paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight || 0) + 20 : 60,
+    paddingHorizontal: 20, paddingBottom: 35,
   },
-
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-
-  hijri: { color: "#fff", fontWeight: "bold", fontSize: 16, marginBottom: 6 },
-  date: { color: "#E5E7EB", fontSize: 14, marginBottom: 4 },
-  location: { color: "#E5E7EB", fontSize: 12, marginBottom: 22 },
-
-  timeWrapper: {
-    alignSelf: "center",
-    backgroundColor: "rgba(0,0,0,0.4)",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 16,
-    marginBottom: 10,
-  },
-
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)", zIndex: 1 },
+  headerContent: { zIndex: 10 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 },
+  hijri: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  date: { color: "#E5E7EB", fontSize: 13 },
+  notificationBtn: { padding: 5, zIndex: 20 },
+  notifBadge: { position: 'absolute', right: 8, top: 8, width: 8, height: 8, backgroundColor: '#FF4B4B', borderRadius: 4, borderWidth: 1, borderColor: '#fff' },
+  location: { color: "#E5E7EB", fontSize: 12, marginBottom: 20 },
+  timeWrapper: { alignSelf: "center", backgroundColor: "rgba(0,0,0,0.3)", paddingHorizontal: 20, paddingVertical: 8, borderRadius: 16, marginBottom: 10 },
   time: { fontSize: 50, fontWeight: "700", color: "#fff" },
-
-  countdown: {
-    textAlign: "center",
-    color: "#E5E7EB",
-    marginBottom: 28,
-    fontSize: 13,
-  },
-
+  countdown: { textAlign: "center", color: "#E5E7EB", marginBottom: 28, fontSize: 13 },
   prayerRow: { flexDirection: "row", justifyContent: "space-between" },
   prayerItem: { alignItems: "center" },
   prayerName: { color: "#E5E7EB", fontSize: 12 },
   prayerTime: { color: "#fff", fontSize: 12, fontWeight: "600", marginTop: 3 },
-
-  searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    marginHorizontal: 20,
-    marginTop: 25,
-    paddingHorizontal: 15,
-    height: 48,
-    borderRadius: 14,
-    ...shadowStyle,
-  },
-
-  input: { marginLeft: 8, flex: 1, fontSize: 14 },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginTop: 30,
-  },
-
-  menuItem: { width: "22%", alignItems: "center", marginBottom: 28 },
-
-  iconBox: {
-    width: 58,
-    height: 58,
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    ...shadowStyle,
-  },
-
-  menuText: { fontSize: 12, marginTop: 8, textAlign: "center" },
-
-  banner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#7C9C92",
-    marginHorizontal: 20,
-    marginBottom: 25,
-    padding: 18,
-    borderRadius: 16,
-  },
-
+  searchBox: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", marginHorizontal: 20, marginTop: 25, paddingHorizontal: 15, height: 50, borderRadius: 14, borderWidth: 1, borderColor: '#EDE7D9' },
+  input: { marginLeft: 8, flex: 1, fontSize: 14, color: '#444' },
+  grid: { flexDirection: "row", flexWrap: "wrap", paddingHorizontal: 20, marginTop: 30 },
+  menuItem: { width: "25%", alignItems: "center", marginBottom: 28 },
+  iconBox: { width: 58, height: 58, backgroundColor: "#fff", borderRadius: 18, justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: '#EDE7D9' },
+  menuText: { fontSize: 12, marginTop: 8, textAlign: "center", color: '#444' },
+  banner: { flexDirection: "row", alignItems: "center", backgroundColor: "#7C9C92", marginHorizontal: 20, marginBottom: 30, padding: 18, borderRadius: 16 },
   bannerTitle: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  bannerSub: { color: "#E5E7EB", fontSize: 12, marginTop: 2 },
-
-  doaSection: { marginBottom: 40 },
-
-  doaTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginLeft: 20,
-    marginBottom: 15,
-  },
-
-  doaCard: {
-    width: 260,
-    backgroundColor: "#fff",
-    marginLeft: 20,
-    padding: 18,
-    borderRadius: 18,
-    ...shadowStyle,
-  },
-
+  bannerSub: { color: "#E5E7EB", fontSize: 11, marginTop: 2 },
+  doaSection: { marginBottom: 20 },
+  doaTitle: { fontSize: 16, fontWeight: "700", marginLeft: 20, marginBottom: 15, color: '#4B6B63' },
+  doaCard: { width: 260, backgroundColor: "#fff", marginLeft: 20, padding: 18, borderRadius: 18, borderWidth: 1, borderColor: '#EDE7D9' },
   userRow: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
-
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#4B6B63",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-
-  avatarText: { color: "#fff", fontWeight: "bold" },
-  doaUser: { fontSize: 14, fontWeight: "700" },
-  doaTime: { fontSize: 11, color: "#6B7280" },
-  doaContent: { fontSize: 13, lineHeight: 18, marginBottom: 12 },
-
-  aamiinSmall: {
-    alignSelf: "flex-start",
-    backgroundColor: "#E6F2EF",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
-
-  aamiinSmallText: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#4B6B63",
-  },
+  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#4B6B63", justifyContent: "center", alignItems: "center", marginRight: 10 },
+  avatarText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
+  doaUser: { fontSize: 14, fontWeight: "700", color: '#444' },
+  doaTime: { fontSize: 11, color: "#999" },
+  doaContent: { fontSize: 13, lineHeight: 19, marginBottom: 15, color: '#666' },
+  aamiinSmall: { alignSelf: "flex-start", backgroundColor: "#F0F9F6", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  aamiinSmallText: { fontSize: 11, fontWeight: "700", color: "#4B6B63" },
 });

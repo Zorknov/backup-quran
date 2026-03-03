@@ -1,146 +1,207 @@
 import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, FlatList, TextInput, 
-  ActivityIndicator, SafeAreaView, Platform, TouchableOpacity 
+  ActivityIndicator, TouchableOpacity, StatusBar, Platform 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-// Import context tema
-// Local fallback theme hook replacing missing '../../context/ThemeContext'
-const useTheme = () => ({
-  colors: {
-    bg: '#FFFFFF',
-    text: '#111827',
-    card: '#F9FAFB',
-    border: '#E5E7EB'
-  },
-  isDark: false
-});
+import { globalIsPlaying, globalCurrentSurahId } from '../detail-surah'; 
 
 export default function AlQuranScreen() {
+  const [surahs, setSurahs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [surahs, setSurahs] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  
+  const [search, setSearch] = useState('');
+  const [sync, setSync] = useState({ id: null as any, playing: false });
   const router = useRouter();
-  // Ambil warna dinamis
-  const { colors, isDark } = useTheme();
 
   useEffect(() => {
-    fetch('https://equran.id/api/v2/surat')
-      .then((res) => res.json())
-      .then((json) => {
-        setSurahs(json.data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Gagal ambil data:", err);
-        setLoading(false);
-      });
+    fetch('https://equran.id/api/v2/surat').then(res => res.json()).then(json => {
+      setSurahs(json.data);
+      setLoading(false);
+    });
+
+    const interval = setInterval(() => {
+      setSync({ id: globalCurrentSurahId, playing: globalIsPlaying });
+    }, 500);
+    return () => clearInterval(interval);
   }, []);
 
-  const filteredSurahs = surahs.filter((s: any) => 
-    s.namaLatin.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const renderSurah = ({ item }: { item: any }) => {
+    const isActive = sync.playing && Number(item.nomor) === Number(sync.id);
 
-  const renderSurah = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.surahItem} 
-      activeOpacity={0.7}
-      onPress={() => router.push({
-        pathname: '/detail-surah',
-        params: { nomor: item.nomor }
-      })}
-    >
-      <View style={styles.numberWrapper}>
-        <View style={[styles.starFrame, { backgroundColor: colors.card, borderColor: '#C5A358' }]}>
-          <Text style={[styles.numberText, { color: colors.text }]}>{item.nomor}</Text>
+    return (
+      <TouchableOpacity 
+        onPress={() => router.push({ pathname: "/detail-surah", params: { id: String(item.nomor) } })}
+        style={[styles.card, isActive && styles.cardActive]}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.numContainer, isActive && styles.numActive]}>
+          <Text style={[styles.numText, isActive && { color: '#FFF' }]}>{item.nomor}</Text>
         </View>
-      </View>
 
-      <View style={styles.infoWrapper}>
-        <Text style={[styles.surahName, { color: colors.text }]}>{item.namaLatin}</Text>
-        <Text style={styles.surahDetail}>{item.arti} • {item.jumlahAyat} Ayat</Text>
-      </View>
+        <View style={styles.infoContainer}>
+          <Text style={[styles.name, isActive && { color: '#C5A358' }]}>{item.namaLatin}</Text>
+          <Text style={styles.subText}>{item.arti.toUpperCase()} • {item.jumlahAyat} AYAT</Text>
+        </View>
 
-      <View style={styles.arabicWrapper}>
-        <Text style={[styles.arabicTitle, { color: isDark ? '#C5A358' : '#7B8FA1' }]}>{item.nama}</Text>
-        <Text style={styles.locationText}>{item.tempatTurun.toLowerCase()}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.rightAction}>
+          {isActive ? (
+            <View style={styles.playingIcon}>
+              <Ionicons name="stats-chart" size={18} color="#C5A358" />
+            </View>
+          ) : (
+            <Text style={styles.arabText}>{item.nama}</Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.bg }]}>
-      <View style={styles.mainContainer}>
-        
-        <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Ionicons name="book" size={26} color="#7B8FA1" />
-            <Text style={[styles.appTitle, { color: colors.text }]}>Al-Quran</Text>
-          </View>
-          <View style={styles.headerIcons}>
-            <Ionicons name="bookmark-outline" size={24} color="#7B8FA1" style={{ marginRight: 15 }} />
-            <Ionicons name="settings-outline" size={24} color="#7B8FA1" />
-          </View>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      
+      <View style={styles.headerLobby}>
+        <View>
+          <Text style={styles.greeting}>Baca Hari Ini,</Text>
+          <Text style={styles.titleLobby}>Al-Quran</Text>
         </View>
-
-        <View style={[styles.searchBar, { backgroundColor: colors.card }]}>
-          <Ionicons name="search" size={20} color="#9CA3AF" />
-          <TextInput 
-            placeholder="Cari surah..." 
-            style={[styles.input, { color: colors.text }]}
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
-
-        {loading ? (
-          <View style={styles.loader}>
-            <ActivityIndicator size="large" color="#C5A358" />
-          </View>
-        ) : (
-          <FlatList
-            data={filteredSurahs}
-            keyExtractor={(item) => item.nomor.toString()}
-            renderItem={renderSurah}
-            ItemSeparatorComponent={() => <View style={[styles.divider, { backgroundColor: colors.border }]} />}
-            contentContainerStyle={{ paddingBottom: 120 }}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
+        <TouchableOpacity 
+          style={styles.headerIcon} 
+          onPress={() => router.back()}
+        >
+          <Ionicons name="chevron-back" size={24} color="#C5A358" />
+        </TouchableOpacity>
       </View>
-    </SafeAreaView>
+
+      <View style={styles.searchSection}>
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={20} color="#9CA3AF" style={{ marginRight: 10 }} />
+          <TextInput 
+            placeholder="Cari Surah..." 
+            style={styles.input} 
+            onChangeText={setSearch} 
+            placeholderTextColor="#9CA3AF" 
+          />
+        </View>
+      </View>
+      
+      {loading ? (
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#C5A358" />
+        </View>
+      ) : (
+        <FlatList
+          data={surahs.filter(s => s.namaLatin.toLowerCase().includes(search.toLowerCase()))}
+          keyExtractor={item => item.nomor.toString()}
+          renderItem={renderSurah}
+          extraData={sync} 
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+      
+      {sync.playing && (
+        <TouchableOpacity 
+          activeOpacity={0.9}
+          style={styles.miniPlayer}
+          onPress={() => router.push({ pathname: "/detail-surah", params: { id: String(sync.id) } })}
+        >
+          <View style={styles.miniPlayerInfo}>
+            <View style={styles.musicIconCircle}>
+              <Ionicons name="musical-notes" size={18} color="white" />
+            </View>
+            <View style={{ marginLeft: 12, flex: 1 }}>
+              <Text style={styles.miniTextLabel}>Sedang Diputar</Text>
+              <Text style={styles.miniTextSurah} numberOfLines={1}>
+                {surahs.find(s => Number(s.nomor) === Number(sync.id))?.namaLatin}
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="play-circle" size={35} color="white" />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  mainContainer: { flex: 1, paddingTop: Platform.OS === 'android' ? 45 : 10 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 15, alignItems: 'center' },
-  headerTitleRow: { flexDirection: 'row', alignItems: 'center' },
-  appTitle: { fontSize: 22, fontWeight: 'bold', marginLeft: 12 },
-  headerIcons: { flexDirection: 'row' },
-  searchBar: {
-    flexDirection: 'row', marginHorizontal: 20, marginBottom: 20, paddingHorizontal: 15, 
-    borderRadius: 12, alignItems: 'center', height: 48, elevation: 3, shadowColor: '#000',
-    shadowOpacity: 0.05, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }
+  container: { 
+    flex: 1, 
+    backgroundColor: '#FCF6EA', 
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 40 
   },
-  input: { flex: 1, marginLeft: 10, fontSize: 16 },
-  surahItem: { flexDirection: 'row', padding: 20, alignItems: 'center' },
-  numberWrapper: { width: 45, justifyContent: 'center' },
-  starFrame: {
-    width: 32, height: 32, borderWidth: 1.5, borderRadius: 6, 
-    transform: [{ rotate: '45deg' }], justifyContent: 'center', alignItems: 'center'
+  headerLobby: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    paddingHorizontal: 25, 
+    paddingTop: 20,
+    paddingBottom: 10
   },
-  numberText: { transform: [{ rotate: '-45deg' }], fontSize: 11, fontWeight: 'bold' },
-  infoWrapper: { flex: 1, marginLeft: 18 },
-  surahName: { fontSize: 17, fontWeight: 'bold' },
-  surahDetail: { fontSize: 12, color: '#9CA3AF', marginTop: 3 },
-  arabicWrapper: { alignItems: 'flex-end' },
-  arabicTitle: { fontSize: 22, fontWeight: 'bold' },
-  locationText: { fontSize: 10, color: '#9CA3AF', marginTop: 4, textTransform: 'capitalize' },
-  divider: { height: 1, marginHorizontal: 20 },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+  greeting: { fontSize: 15, color: '#7B8FA1', fontWeight: '500' },
+  titleLobby: { fontSize: 26, fontWeight: '800', color: '#4B6B63' },
+  headerIcon: { backgroundColor: '#FFF', padding: 10, borderRadius: 12 }, // Shadow dihapus
+  
+  searchSection: { paddingHorizontal: 20, marginVertical: 15 },
+  searchBar: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    backgroundColor: 'white', 
+    paddingHorizontal: 15, 
+    height: 55,
+    borderRadius: 16,
+    // Shadow & Elevation dihapus
+  },
+  input: { flex: 1, fontSize: 16, color: '#444' },
+  
+  listContent: { paddingHorizontal: 20, paddingBottom: 150 },
+  card: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    padding: 16, 
+    backgroundColor: 'white', 
+    marginBottom: 12, 
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EDE7D9', // Border halus pengganti shadow
+    // Shadow & Elevation dihapus
+  },
+  cardActive: { 
+    borderColor: '#C5A358', 
+    borderWidth: 1.5,
+    backgroundColor: '#FFFDF5' 
+  },
+  numContainer: { width: 42, height: 42, backgroundColor: '#F8F4E8', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  numActive: { backgroundColor: '#C5A358' },
+  numText: { fontSize: 14, fontWeight: '700', color: '#7B8FA1' },
+  
+  infoContainer: { flex: 1, marginLeft: 15 },
+  name: { fontSize: 17, fontWeight: '700', color: '#444' },
+  subText: { fontSize: 11, color: '#999', marginTop: 3 },
+  
+  rightAction: { alignItems: 'flex-end' },
+  arabText: { fontSize: 20, color: '#4B6B63', fontWeight: 'bold' },
+  playingIcon: { backgroundColor: '#FFF9E6', padding: 8, borderRadius: 10 },
+
+  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  miniPlayer: { 
+    position: 'absolute', 
+    bottom: 30, 
+    left: 20, 
+    right: 20, 
+    backgroundColor: '#4B6B63', 
+    padding: 15, 
+    borderRadius: 24, 
+    flexDirection: 'row', 
+    alignItems: 'center',
+    // Shadow & Elevation pada mini player bisa tetap ada agar "melayang", 
+    // tapi jika mau dihapus total, kabari ya!
+    elevation: 5 
+  },
+  miniPlayerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  musicIconCircle: { backgroundColor: '#C5A358', padding: 8, borderRadius: 50 },
+  miniTextLabel: { color: '#E5E7EB', fontSize: 10, fontWeight: 'bold' },
+  miniTextSurah: { color: 'white', fontWeight: 'bold', fontSize: 15 }
 });

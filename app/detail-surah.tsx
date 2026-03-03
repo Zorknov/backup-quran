@@ -6,154 +6,182 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
-// Fallback useTheme hook (remove broken import if ../context/ThemeContext is missing)
-const useTheme = () => ({
-  colors: { bg: '#FFFFFF', text: '#111827', border: '#E5E7EB' },
-  isDark: false,
-});
+
+// --- STATE GLOBAL (WAJIB EXPORT) ---
+export let globalSound: Audio.Sound | null = null;
+export let globalIsPlaying = false;
+export let globalCurrentSurahId: string | null = null;
+export let globalCurrentAyat: number | null = null;
+export let globalStopRequest = false;
 
 export default function DetailSurah() {
-  const { nomor } = useLocalSearchParams();
+  const { id } = useLocalSearchParams();
   const router = useRouter();
-  const { colors, isDark } = useTheme();
+  const isMounted = useRef(true);
   
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any>(null);
-  const [playingAyat, setPlayingAyat] = useState<number | null>(null);
-  const [isFullPlaying, setIsFullPlaying] = useState(false);
-  
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const isStopPressed = useRef(false);
+  const [sync, setSync] = useState({ ayat: null as any, playing: false, id: null as any });
 
-  useEffect(() => {
-    fetch(`https://equran.id/api/v2/surat/${nomor}`)
-      .then((res) => res.json())
-      .then((json) => {
-        setDetail(json.data);
-        setLoading(false);
-      })
-      .catch((err) => console.error(err));
-
-    return () => { stopAudioGlobal(); };
-  }, [nomor]);
-
-  const stopAudioGlobal = async () => {
-    isStopPressed.current = true;
-    setIsFullPlaying(false);
-    setPlayingAyat(null);
-    if (soundRef.current) {
+  // 1. FUNGSI STOP
+  const stopAudio = async () => {
+    globalStopRequest = true;
+    globalIsPlaying = false;
+    if (globalSound) {
       try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      } catch (e) { console.log(e); }
+        await globalSound.stopAsync();
+        await globalSound.unloadAsync();
+      } catch (e) {}
     }
+    globalSound = null;
   };
 
-  const playAyatSync = async (url: string, nomorAyat: number) => {
-    return new Promise(async (resolve) => {
-      try {
-        if (soundRef.current) await soundRef.current.unloadAsync();
-        setPlayingAyat(nomorAyat);
-        const { sound: newSound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
-        soundRef.current = newSound;
-        newSound.setOnPlaybackStatusUpdate((status) => {
-          if (status.isLoaded && status.didJustFinish) {
-            setPlayingAyat(null);
-            resolve(true); 
-          }
+  // 2. LOGIKA PUTAR & AUTOPLAY (HANDLING BACK ACTION)
+  const playFullSurah = async (surahData: any) => {
+    if (!surahData?.ayat) return;
+
+    // Toggle Stop jika surah yang sama diklik lagi
+    if (Number(globalCurrentSurahId) === Number(surahData.nomor) && globalIsPlaying && globalSound) {
+      await stopAudio();
+      return;
+    }
+
+    await stopAudio();
+    globalStopRequest = false;
+    globalIsPlaying = true;
+    globalCurrentSurahId = String(surahData.nomor);
+
+    try {
+      await Audio.setAudioModeAsync({ 
+        staysActiveInBackground: true, 
+        shouldDuckAndroid: true,
+        playsInSilentModeIOS: true 
+      });
+
+      for (const ayat of surahData.ayat) {
+        if (globalStopRequest || Number(globalCurrentSurahId) !== Number(surahData.nomor)) break;
+
+        globalCurrentAyat = ayat.nomorAyat;
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: ayat.audio['05'] },
+          { shouldPlay: true }
+        );
+        globalSound = sound;
+
+        await new Promise((resolve) => {
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded && status.didJustFinish) resolve(true);
+            if (globalStopRequest) resolve(false);
+          });
         });
-      } catch (error) { resolve(false); }
-    });
+
+        if (globalSound) { await globalSound.unloadAsync(); globalSound = null; }
+      }
+
+      // --- LOGIKA AUTOPLAY NEXT ---
+      if (!globalStopRequest && globalIsPlaying) {
+        const nextId = Number(surahData.nomor) + 1;
+        if (nextId <= 114) {
+          globalCurrentSurahId = String(nextId);
+          globalCurrentAyat = 1;
+
+          // JIKA MASIH DI DETAIL: Ganti Halaman
+          if (isMounted.current) {
+            router.replace({ pathname: "/detail-surah", params: { id: String(nextId) } });
+          } else {
+            // JIKA SUDAH DI LOBBY: Fetch & Play di Background
+            const res = await fetch(`https://equran.id/api/v2/surat/${nextId}`);
+            const nextJson = await res.json();
+            if (nextJson.data) playFullSurah(nextJson.data);
+          }
+        } else {
+          await stopAudio();
+        }
+      }
+    } catch (e) {
+      globalIsPlaying = false;
+    }
   };
 
-  async function handleFullSurahPlay() {
-    if (isFullPlaying) { await stopAudioGlobal(); return; }
-    isStopPressed.current = false;
-    setIsFullPlaying(true);
-    for (const ayat of detail.ayat) {
-      if (isStopPressed.current) break; 
-      await playAyatSync(ayat.audio['05'], ayat.nomorAyat);
-    }
-    setIsFullPlaying(false);
-  }
+  // 3. MONITOR SYNC
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSync({ id: globalCurrentSurahId, ayat: globalCurrentAyat, playing: globalIsPlaying });
+    }, 500);
+    return () => clearInterval(timer);
+  }, []);
 
-  const renderAyat = ({ item }: { item: any }) => (
-    <View style={[styles.ayatCard, { borderBottomColor: colors.border }]}>
-      <View style={styles.ayatHeader}>
-        <View style={[styles.ayatNumberBadge, { backgroundColor: playingAyat === item.nomorAyat ? '#C5A358' : '#7B8FA1' }]}>
-          <Text style={styles.ayatNumberText}>{item.nomorAyat}</Text>
-        </View>
-        <View style={styles.ayatActions}>
-          <TouchableOpacity style={{ marginRight: 20 }} onPress={() => playAyatSync(item.audio['05'], item.nomorAyat)}>
-            <Ionicons 
-              name={playingAyat === item.nomorAyat ? "pause-circle" : "play-outline"} 
-              size={26} 
-              color={playingAyat === item.nomorAyat ? "#C5A358" : "#7B8FA1"} 
-            />
-          </TouchableOpacity>
-          <TouchableOpacity>
-            <Ionicons name="bookmark-outline" size={22} color="#7B8FA1" />
-          </TouchableOpacity>
-        </View>
-      </View>
+  // 4. FETCH DATA
+  useEffect(() => {
+    isMounted.current = true;
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://equran.id/api/v2/surat/${id}`);
+        const json = await res.json();
+        if (isMounted.current) {
+          setDetail(json.data);
+          // Auto-trigger jika pindah surah (Autoplay)
+          if (globalIsPlaying && Number(globalCurrentSurahId) === Number(id) && !globalSound) {
+            playFullSurah(json.data);
+          }
+        }
+      } catch (e) {} finally { if (isMounted.current) setLoading(false); }
+    };
+    loadData();
+    return () => { isMounted.current = false; };
+  }, [id]);
 
-      <Text style={[styles.arabicText, { color: colors.text }]}>{item.teksArab}</Text>
-      <Text style={[styles.latinText, { color: isDark ? '#C5A358' : '#7B8FA1' }]}>{item.teksLatin}</Text>
-      <Text style={[styles.translationText, { color: isDark ? '#9CA3AF' : '#4A4A4A' }]}>{item.teksIndonesia}</Text>
-    </View>
-  );
-
-  if (loading) return <View style={[styles.loader, { backgroundColor: colors.bg }]}><ActivityIndicator size="large" color="#C5A358" /></View>;
+  const isCurrentSurahActive = sync.playing && Number(sync.id) === Number(id);
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={async () => { await stopAudioGlobal(); router.back(); }}>
-          <Ionicons name="arrow-back" size={24} color="#7B8FA1" />
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color="#4A4A4A" />
         </TouchableOpacity>
-        <View style={styles.headerTitleContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{detail.namaLatin}</Text>
-          <Text style={styles.headerSubtitle}>{detail.arti} • {detail.jumlahAyat} Ayat</Text>
-        </View>
-        <Text style={[styles.headerArabic, { color: isDark ? '#C5A358' : '#7B8FA1' }]}>{detail.nama}</Text>
+        <Text style={styles.title}>{detail?.namaLatin || 'Loading...'}</Text>
+        <Text style={styles.arabicHeader}>{detail?.nama}</Text>
       </View>
 
-      <FlatList
-        data={detail.ayat}
-        keyExtractor={(item) => item.nomorAyat.toString()}
-        renderItem={renderAyat}
-        ListHeaderComponent={
-          <TouchableOpacity 
-            style={[styles.playAllButton, { backgroundColor: isFullPlaying ? '#C5A358' : '#7B8FA1' }]}
-            onPress={handleFullSurahPlay}
-          >
-            <Ionicons name={isFullPlaying ? "stop-circle" : "volume-medium-outline"} size={20} color="white" />
-            <Text style={styles.playAllText}>{isFullPlaying ? "Berhenti" : "Putar Full Surah"}</Text>
-          </TouchableOpacity>
-        }
-        contentContainerStyle={{ paddingBottom: 40 }}
-      />
+      {loading ? <ActivityIndicator size="large" color="#C5A358" style={{marginTop: 50}} /> : (
+        <FlatList
+          data={detail?.ayat}
+          keyExtractor={(item) => item.nomorAyat.toString()}
+          renderItem={({ item }) => (
+            <View style={[styles.ayatCard, (isCurrentSurahActive && sync.ayat === item.nomorAyat) && styles.ayatActive]}>
+              <Text style={styles.badgeText}>{item.nomorAyat}</Text>
+              <Text style={styles.arabText}>{item.teksArab}</Text>
+              <Text style={styles.indoText}>{item.teksIndonesia}</Text>
+            </View>
+          )}
+          ListHeaderComponent={
+            <TouchableOpacity 
+              style={[styles.btnPlay, isCurrentSurahActive && {backgroundColor: '#C5A358'}]}
+              onPress={() => playFullSurah(detail)}
+            >
+              <Ionicons name={isCurrentSurahActive ? "stop-circle" : "play-circle"} size={26} color="white" />
+              <Text style={styles.btnPlayText}>{isCurrentSurahActive ? "Berhenti" : "Putar Full Surah"}</Text>
+            </TouchableOpacity>
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: Platform.OS === 'android' ? 45 : 20, borderBottomWidth: 1 },
-  headerTitleContainer: { flex: 1, marginLeft: 15 },
-  headerTitle: { fontSize: 18, fontWeight: 'bold' },
-  headerSubtitle: { fontSize: 11, color: '#9CA3AF' },
-  headerArabic: { fontSize: 20, fontWeight: 'bold' },
-  playAllButton: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: 20, padding: 12, borderRadius: 10 },
-  playAllText: { color: 'white', fontWeight: 'bold', marginLeft: 8 },
-  ayatCard: { padding: 20, borderBottomWidth: 1 },
-  ayatHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  ayatNumberBadge: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-  ayatNumberText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
-  ayatActions: { flexDirection: 'row', alignItems: 'center' },
-  arabicText: { fontSize: 26, textAlign: 'right', fontWeight: 'bold', lineHeight: 45, marginBottom: 15 },
-  latinText: { fontSize: 14, fontStyle: 'italic', marginBottom: 8 },
-  translationText: { fontSize: 14, lineHeight: 22 },
+  container: { flex: 1, backgroundColor: '#FDF7E9' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, backgroundColor: 'white', paddingTop: 50 },
+  backBtn: { padding: 5 },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#4A4A4A' },
+  arabicHeader: { fontSize: 22, color: '#7B8FA1', fontWeight: 'bold' },
+  btnPlay: { flexDirection: 'row', backgroundColor: '#7B8FA1', margin: 20, padding: 16, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+  btnPlayText: { color: 'white', fontWeight: 'bold', marginLeft: 10 },
+  ayatCard: { padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#F0F0F0' },
+  ayatActive: { backgroundColor: '#FFF9E6', borderLeftWidth: 5, borderLeftColor: '#C5A358' },
+  badgeText: { color: '#7B8FA1', fontWeight: 'bold', marginBottom: 10 },
+  arabText: { fontSize: 26, textAlign: 'right', fontWeight: 'bold', color: '#333', lineHeight: 45 },
+  indoText: { marginTop: 12, color: '#666', fontSize: 14, lineHeight: 20 }
 });

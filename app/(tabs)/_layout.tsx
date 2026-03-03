@@ -1,22 +1,22 @@
 import { Tabs } from "expo-router";
 import React from "react";
-import { StyleSheet, View, Text, Platform } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { StyleSheet, View, Text, Platform, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#4C6793", // Biru sesuai gambar
+        tabBarActiveTintColor: "#4B6B63", // Hijau tema aplikasi
         tabBarInactiveTintColor: "#9CA3AF",
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.label,
-        tabBarShowLabel: true, // Pastikan label muncul
+        tabBarShowLabel: true,
       }}
     >
       <Tabs.Screen
-        name="index" // Pastikan ada file index.tsx
+        name="index"
         options={{
           title: "Beranda",
           tabBarIcon: ({ color }) => (
@@ -26,7 +26,7 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="alquran" // PASTIKAN nama file kamu: alquran.tsx atau alquran/index.tsx
+        name="alquran"
         options={{
           title: "Al-Quran",
           tabBarIcon: ({ color }) => (
@@ -55,19 +55,29 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Tambahan Tombol AI agar persis seperti gambar */}
+      {/* Tombol AI - Fix TypeScript & Interaksi */}
       <Tabs.Screen
         name="ai_chat"
         options={{
           title: "AI",
-          tabBarButton: (props) => (
-            <View style={styles.aiButtonWrapper}>
-              <View style={styles.aiButton}>
-                <MaterialCommunityIcons name={"sparkles" as any} size={18} color="#4C6793" />
+          tabBarButton: (props) => {
+            // Destruktur props untuk menghindari error 'null' pada TypeScript
+            const { onPress, style } = props;
+            
+            return (
+              <TouchableOpacity
+                onPress={onPress}
+                activeOpacity={0.7}
+                // Menggabungkan style bawaan navigasi dengan custom wrapper
+                style={[style, styles.aiButtonWrapper]}
+              >
+                <View style={styles.aiButton}>
+                  <Ionicons name="sparkles" size={16} color="#4B6B63" />
                   <Text style={styles.aiText}>AI</Text>
-              </View>
-            </View>
-          ),
+                </View>
+              </TouchableOpacity>
+            );
+          },
         }}
       />
     </Tabs>
@@ -79,43 +89,46 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: Platform.OS === "ios" ? 30 : 20,
     marginHorizontal: 15,
-    height: 70,
+    height: 65,
     borderRadius: 35,
     backgroundColor: "#FFFFFF",
     borderTopWidth: 0,
-    // Shadow untuk efek floating
-    elevation: 5,
+    // Flat design dengan border halus sesuai permintaan sebelumnya
+    borderWidth: 1,
+    borderColor: "#F2EADD",
+    // Shadow sangat tipis agar tetap elegan
+    elevation: 3,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
-    paddingBottom: Platform.OS === "ios" ? 0 : 10,
+    paddingBottom: Platform.OS === "ios" ? 20 : 10,
     paddingTop: 10,
   },
   label: {
     fontSize: 10,
-    fontWeight: "500",
-    marginBottom: 5,
+    fontWeight: "600",
   },
   aiButtonWrapper: {
     justifyContent: "center",
     alignItems: "center",
-    paddingRight: 15, // Biar mepet kanan seperti di gambar
+    // Memberikan sedikit ruang di kanan agar tidak terlalu mepet
+    paddingRight: 10,
   },
   aiButton: {
     flexDirection: "row",
-    backgroundColor: "#F3F6F9",
-    paddingVertical: 8,
-    paddingHorizontal: 15,
+    backgroundColor: "#F0FDF4", // Background hijau pucat
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     borderRadius: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: "#DCFCE7",
   },
   aiText: {
-    color: "#4C6793",
+    color: "#4B6B63",
     fontWeight: "bold",
     fontSize: 12,
-    marginLeft: 5,
+    marginLeft: 4,
   },
 });
